@@ -277,27 +277,26 @@ if __name__ == "__main__":
     img_path = "./src/img/"
     model_path = "./src/model/"
     imgs = [f for f in os.listdir(img_path) if f.endswith(".png") and "-mask" not in f]
-    imgs_label_dict = {img: img.replace(".png", "-mask.png") for img in imgs}
+    imgs_label_dict = {
+        os.path.join(img_path, img): os.path.join(
+            img_path, img.replace(".png", "-mask.png")
+        )
+        for img in imgs
+    }
     imgs = list(imgs_label_dict.keys())
     labels = list(imgs_label_dict.values())
     models = [
-        "deep_bs4(2e-5).th",
-
+        os.path.join(model_path, model)
+        for model in os.listdir(model_path)
+        if model.endswith(".th")
     ]
-    # models = [os.path.join(model_path, model) for model in models]
     headers = ["TP", "FN", "TN", "FP", "acc", "recall", "iou", "pre", "f1"]
-    selected_image_path = os.path.join(img_path, imgs[0])
+    selected_image_path = imgs[0]
     images_per_row_state = gr.State(2)
-    height = 50
+    height = 400
 
     with gr.Blocks() as demo:
-        title = """
-                <center> 
-                <h1> 道路提取系统 </h1>
-                </center>
-                """
-        with gr.Row():
-            gr.HTML(title)
+        gr.Markdown("# 我也不知道这儿写啥反正写点东西就行吧哈哈哈")
 
         # 第一行，创建下拉框 选择图像
         with gr.Row():
@@ -311,7 +310,7 @@ if __name__ == "__main__":
             with gr.Column():
                 gr.Markdown("##### Input image preview.")
                 selected_image_preview = gr.Image(
-                    os.path.join(img_path, imgs[0]),
+                    imgs[0],
                     container=False,
                     height=height,
                     min_width=0,
@@ -319,22 +318,22 @@ if __name__ == "__main__":
             with gr.Column():
                 gr.Markdown("##### Input label preview.")
                 selected_image_label = gr.Image(
-                    os.path.join(img_path, labels[0]),
+                    labels[0],
                     container=False,
                     height=height,
                     min_width=0,
                     label="Input label preview.",
                 )
                 selected_image.change(
-                    fn=lambda image_path: os.path.join(
-                        img_path, imgs_label_dict.get(image_path)
+                    fn=lambda image_path: imgs_label_dict.get(
+                        image_path
                     ),  # 触发时调用的函数
                     inputs=selected_image,  # 函数的输入
                     outputs=selected_image_label,  # 函数的输出
                 )
 
-            def onDropDownChange(image_name):
-                selected_image_path = gr.State(os.path.join(img_path, image_name))
+            def onDropDownChange(image_path):
+                selected_image_path = gr.State(image_path)
                 return selected_image_path
 
             selected_image.change(
@@ -347,38 +346,27 @@ if __name__ == "__main__":
             btn = gr.Button("提交 & 转换", size=[100, 80])
 
         output_list = []
-        count_per_row = 1
-        idx = 0
+        count_per_row = 2
         for i in range(0, len(models), count_per_row):
-            # with gr.Group():
-            with gr.Row(equal_height=True):
+            with gr.Row():
                 for j in range(0, count_per_row):
-                    # with gr.Column():
-                    #     gr.Markdown(f"{models[i]}")
-                    output_list.append(
-                        gr.Image(
-                            type="numpy",
-                            container=False,
-                            height=height,
-                            min_width=height,
-                            label=models[idx],
-                            show_label=True
+                    with gr.Column():
+                        gr.Markdown(f"#### 第{i*count_per_row+j+1}个模型:{models[i]}")
+                        output_list.append(
+                            gr.Image(
+                                type="numpy",
+                                container=False,
+                                height=height,
+                                min_width=0,
+                            )
                         )
-                    )
-            idx+=1
-            
                 # with gr.Column():
                 #     output_list.append(gr.DataFrame(headers=headers[:5]))
                 #     output_list.append(gr.DataFrame(headers=headers[5:]))
 
         # 第四行- 若干模型的输出图和表格展示
         def on_button_click():
-            return asyncio.run(
-                run_models_concurrently(
-                    selected_image_path,
-                    [os.path.join(model_path, model) for model in models],
-                )
-            )
+            return asyncio.run(run_models_concurrently(selected_image_path, models))
 
         btn.click(
             on_button_click,
