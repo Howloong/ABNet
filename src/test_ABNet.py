@@ -1,10 +1,5 @@
-import asyncio
-import concurrent.futures
-import itertools
 import os
 import warnings
-from time import time
-import concurrent
 import cv2
 import matplotlib.image as mping
 import matplotlib.pyplot as plt
@@ -222,6 +217,7 @@ def test_ce_net_vessel(source, model):
     total_pre.append(pre)
     total_f1.append(f1)
     params = {
+        "模型名": os.path.splitext(os.path.basename(model))[0],
         "TP": TP,
         "FN": FN,
         "TN": TN,
@@ -251,26 +247,39 @@ def test_ce_net_vessel(source, model):
     print("iou:", np.mean(total_iou), "acc_iou:", np.std(total_iou))
     print("pre:", np.mean(total_pre), "acc_pre:", np.std(total_pre))
     print("f1:", np.mean(total_f1), "acc_f1:", np.std(total_f1))
-    return (
-        (mask / 127.5) - 1,
-        # pd.DataFrame([dict(list(params.items())[:5])]).round(2),
-        # pd.DataFrame([dict(list(params.items())[5:])]).round(2),
+    return [(mask / 127.5) - 1, {model: params}]
+
+
+def run_models_inorder(image_path, model_list):
+    all_params = {}
+    all_componnents_source = []
+    idx = 1
+    for model in model_list:
+        # image, param = test_ce_net_vessel(image_path, model)
+        image = Image.open(image_path)
+        param = {
+            f"test{idx}": {
+                "模型名": f"test{idx}",
+                "TP": 1.22,
+                "FN": 2.22,
+                "TN": 3.22,
+                "FP": 4.33,
+                "acc": 511.22,
+                "recall": 6.32,
+                "iou": 7999.22,
+                "pre": 8.11,
+                "f1": 12341.22,
+            }
+        }
+        idx += 1
+        all_componnents_source.append(image)
+        all_params.update(param)
+    all_componnents_source.append(
+        pd.DataFrame()
+        .from_dict(all_params, orient="index")
+        .round(2)
     )
-
-
-async def run_models_concurrently(image_path, model_list):
-    loop = asyncio.get_event_loop()
-
-    # 创建一个线程池来并行执行模型
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [
-            loop.run_in_executor(executor, test_ce_net_vessel, image_path, model)
-            for model in model_list
-        ]
-
-        # 等待所有任务完成并收集结果
-        results = await asyncio.gather(*futures)
-    return tuple(itertools.chain(*results))
+    return tuple(all_componnents_source)
 
 
 if __name__ == "__main__":
@@ -282,15 +291,43 @@ if __name__ == "__main__":
     labels = list(imgs_label_dict.values())
     models = [
         "deep_bs4(2e-5).th",
-
+        "mass_bs4(2e-5).th",
+        "deep_bs4(2e-5).th",
+        "mass_bs4(2e-5).th",
+        "deep_bs4(2e-5).th",
+        "mass_bs4(2e-5).th",
+        "deep_bs4(2e-5).th",
+        "mass_bs4(2e-5).th",
     ]
     # models = [os.path.join(model_path, model) for model in models]
-    headers = ["TP", "FN", "TN", "FP", "acc", "recall", "iou", "pre", "f1"]
+    headers = ["模型名", "TP", "FN", "TN", "FP", "acc", "recall", "iou", "pre", "f1"]
     selected_image_path = os.path.join(img_path, imgs[0])
     images_per_row_state = gr.State(2)
-    height = 50
+    height = 150
 
-    with gr.Blocks() as demo:
+    with gr.Blocks(css="""
+                    footer {
+                        visibility: hidden
+                    }
+
+                    #table table {
+                        overflow-x: hidden !important;
+                        overflow-y: hidden !important;
+                    }
+
+                    #table span {
+                        font-family: 'Microsoft YaHei', '微软雅黑', sans-serif !important;
+                        text-align: center;
+                    }
+
+                    .sort-button {
+                        display: none !important;
+                    }
+                    .image img{
+                        position: absolute!important;
+                        top: 13px !important;
+                    }
+                   """) as demo:
         title = """
                 <center> 
                 <h1> 道路提取系统 </h1>
@@ -303,27 +340,24 @@ if __name__ == "__main__":
         with gr.Row():
             selected_image = gr.Dropdown(
                 choices=list(imgs_label_dict.keys()),
-                label="Source Image",
                 value=imgs[0],
+                show_label=False,
                 info="选择输入图像",
             )
         with gr.Row():
             with gr.Column():
-                gr.Markdown("##### Input image preview.")
+                gr.Markdown("##### 高分辨率遥感影像")
                 selected_image_preview = gr.Image(
                     os.path.join(img_path, imgs[0]),
                     container=False,
                     height=height,
-                    min_width=0,
                 )
             with gr.Column():
-                gr.Markdown("##### Input label preview.")
+                gr.Markdown("##### 对应道路标签")
                 selected_image_label = gr.Image(
                     os.path.join(img_path, labels[0]),
                     container=False,
                     height=height,
-                    min_width=0,
-                    label="Input label preview.",
                 )
                 selected_image.change(
                     fn=lambda image_path: os.path.join(
@@ -347,9 +381,9 @@ if __name__ == "__main__":
             btn = gr.Button("提交 & 转换", size=[100, 80])
 
         output_list = []
-        count_per_row = 1
+        count_per_row = 4
         idx = 0
-        for i in range(0, len(models), count_per_row):
+        for i in range(0, 8, count_per_row):
             # with gr.Group():
             with gr.Row(equal_height=True):
                 for j in range(0, count_per_row):
@@ -358,26 +392,25 @@ if __name__ == "__main__":
                     output_list.append(
                         gr.Image(
                             type="numpy",
-                            container=False,
-                            height=height,
+                            container=True,
+                            width=height,
+                            height=height+40,
                             min_width=height,
                             label=models[idx],
-                            show_label=True
+                            show_label=True,
+                            interactive=False,
+                            elem_classes=["image"]
                         )
                     )
-            idx+=1
-            
-                # with gr.Column():
-                #     output_list.append(gr.DataFrame(headers=headers[:5]))
-                #     output_list.append(gr.DataFrame(headers=headers[5:]))
+            idx += 1
+        output_list.append(gr.DataFrame(headers=headers, elem_id="table"))
 
         # 第四行- 若干模型的输出图和表格展示
         def on_button_click():
-            return asyncio.run(
-                run_models_concurrently(
-                    selected_image_path,
-                    [os.path.join(model_path, model) for model in models],
-                )
+            return run_models_inorder(
+                selected_image_path,
+                # [os.path.join(model_path, model) for model in models],
+                [os.path.join(model_path, model) for model in models],
             )
 
         btn.click(
