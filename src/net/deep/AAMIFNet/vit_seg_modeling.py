@@ -15,8 +15,8 @@ import numpy as np
 
 from torch.nn import CrossEntropyLoss, Dropout, Softmax, Linear, Conv2d, LayerNorm
 from torch.nn.modules.utils import _pair
-import net4.vit_seg_configs as configs
-from net4.vit_seg_modeling_resnet_skip import ResNetV2
+import vit_seg_configs as configs
+from vit_seg_modeling_resnet_skip import ResNetV2
 
 
 logger = logging.getLogger(__name__)

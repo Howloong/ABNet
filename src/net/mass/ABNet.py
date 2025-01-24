@@ -179,6 +179,8 @@ class ASPP_module(nn.Module):  # ASpp模块的组成
 
 # 正式开始deeplabv3+的结构组成
 class ABNet(nn.Module):
+    def get_name(self):
+        return 'ABNet'
     def __init__(self, nInputChannels=3, n_classes=1, os=16, pretrained=False, freeze_bn=False, _print=True):
         if _print:
             print("Constructing DeepLabv3+ model...")

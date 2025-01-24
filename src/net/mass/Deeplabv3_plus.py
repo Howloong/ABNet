@@ -205,9 +205,12 @@ class ASPPPoolingW(nn.Sequential):
 
 
 # 正式开始deeplabv3+的结构组成
-class DeepLabv3_plus(nn.Module):
+class Deeplabv3_plus(nn.Module):
+    def get_name(self):
+        return 'Deeplabv3_plus'
+
     def __init__(self, nInputChannels=3, n_classes=1, os=16, pretrained=False, freeze_bn=False, _print=True):
-        super(DeepLabv3_plus, self).__init__()
+        super(Deeplabv3_plus, self).__init__()
 
         filters = [64, 64, 128, 256, 512]
 

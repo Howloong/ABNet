@@ -294,6 +294,8 @@ class ASPPPoolingW(nn.Sequential):
 
 # 正式开始ABNet的结构组成
 class Deeplabv3_plus(nn.Module):
+    def get_name(self):
+        return 'Deeplabv3_plus'
     def __init__(self, nInputChannels=3, n_classes=1, os=16, pretrained=False, freeze_bn=False, _print=True):
         super(Deeplabv3_plus, self).__init__()
 

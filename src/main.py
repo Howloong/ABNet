@@ -1,5 +1,16 @@
+import sys
 import os
+
+from tqdm import tqdm
+
+sys.path.append(f"{os.path.dirname(__file__)}/net/deep/AAMIFNet")
+sys.path.append(f"{os.path.dirname(__file__)}/net/deep/AMIFNet")
+sys.path.append(f"{os.path.dirname(__file__)}/net/mass/AAMIFNet")
+sys.path.append(f"{os.path.dirname(__file__)}/net/mass/ADEFNet")
+
+
 import warnings
+from pathlib import Path
 
 import cv2
 import gradio as gr
@@ -8,175 +19,29 @@ import pandas as pd
 from PIL import Image
 
 from TTAFrame import TTAFrame
+from net.deep.AABNet import AABNet as deep_AABNet
+from net.deep.AADEFNet import AADEFNet as deep_AADEFNet
+from net.deep.AAMIFNet.AAMIFNet import AAMIFNet as deep_AAMIFNet
+from net.deep.ABNet import ABNet as deep_ABNet
+from net.deep.ADEFNet import ADEFNet as deep_ADEFNet
+from net.deep.AMIFNet.AMIFNet import AMIFNet as deep_AMIFNet
+from net.deep.Deeplabv3_plus import Deeplabv3_plus as deep_Deeplabv3_plus
+from net.deep.UNet import UNet as deep_UNet
+from net.mass.AABNet import AABNet as mass_AABNet
+from net.mass.AADEFNet import AADEFNet as mass_AADEFNet
+from net.mass.AAMIFNet.AAMIFNet import AAMIFNet as mass_AAMIFNet
+from net.mass.ABNet import ABNet as mass_ABNet
+from net.mass.ADEFNet.ADEFNet import ADEFNet as mass_ADEFNet
+from net.mass.AMIFNet import AMIFNet as mass_AMIFNet
+from net.mass.Deeplabv3_plus import Deeplabv3_plus as mass_Deeplabv3_plus
+from net.mass.UNet import UNet as mass_UNet
 
 warnings.filterwarnings("ignore")
 
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-BATCHSIZE_PER_CARD = 8  # 8->4
+BATCHSIZE_PER_CARD = 8
 
-if __name__ == "__main__":
-    # 数据集image路径
-    dataset_DeepGlobe_path = "./img/DeepGlobe"
-    dataset_CHN6_path = "./img/CHN6-CUG"
-    dataset_Massachusetts_path = "./img/Massachusetts"
-    dataset_SpaceNet_path = "./img/SpaceNet"
-    # 权重路径
-    weight_deep_path = "./weight/deep"
-    weight_mass_path = "./weight/mass"
-
-    # 网络
-    net_deep_list=[ABNet]
-    imgs = [f for f in os.listdir(img_path) if f.endswith(".png") and "-mask" not in f]
-    imgs_label_dict = {img: img.replace(".png", "-mask.png") for img in imgs}
-    imgs = list(imgs_label_dict.keys())
-    labels = list(imgs_label_dict.values())
-    models = [
-        "deep_bs4(2e-5).th",
-        "mass_bs4(2e-5).th",
-        "deep_bs4(2e-5).th",
-        "mass_bs4(2e-5).th",
-        "deep_bs4(2e-5).th",
-        "mass_bs4(2e-5).th",
-        "deep_bs4(2e-5).th",
-        "mass_bs4(2e-5).th",
-    ]
-    # models = [os.path.join(model_path, model) for model in models]
-    headers = ["模型名", "TP", "FN", "TN", "FP", "acc", "recall", "iou", "pre", "f1"]
-    selected_image_path = os.path.join(img_path, imgs[0])
-    images_per_row_state = gr.State(2)
-    height = 150
-
-    with gr.Blocks(css="""
-                    footer {
-                        visibility: hidden
-                    }
-
-                    #table table {
-                        overflow-x: hidden !important;
-                        overflow-y: hidden !important;
-                    }
-
-                    #table span {
-                        font-family: 'Microsoft YaHei', '微软雅黑', sans-serif !important;
-                        text-align: center;
-                    }
-
-                    .sort-button {
-                        display: none !important;
-                    }
-                    .image img{
-                        position: absolute!important;
-                        top: 13px !important;
-                    }
-                   """) as demo:
-        title = """
-                <center> 
-                <h1> 道路提取系统 </h1>
-                </center>
-                """
-        with gr.Row():
-            gr.HTML(title)
-
-        # 第一行，创建下拉框 选择图像
-        with gr.Row():
-            selected_dataset = gr.Dropdown(
-                choices=list(imgs_label_dict.keys()),
-                value=imgs[0],
-                show_label=False,
-                info="选择数据集",
-            )
-            selected_image = gr.Dropdown(
-                choices=list(imgs_label_dict.keys()),
-                value=imgs[0],
-                show_label=False,
-                info="选择输入图像",
-            )
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("##### 高分辨率遥感影像")
-                selected_image_preview = gr.Image(
-                    os.path.join(img_path, imgs[0]),
-                    container=False,
-                    height=height,
-                )
-            with gr.Column():
-                gr.Markdown("##### 对应道路标签")
-                selected_image_label = gr.Image(
-                    os.path.join(img_path, labels[0]),
-                    container=False,
-                    height=height,
-                )
-                selected_image.change(
-                    fn=lambda image_path: os.path.join(
-                        img_path, imgs_label_dict.get(image_path)
-                    ),  # 触发时调用的函数
-                    inputs=selected_image,  # 函数的输入
-                    outputs=selected_image_label,  # 函数的输出
-                )
-
-
-            def onDropDownChange(image_name):
-                selected_image_path = gr.State(os.path.join(img_path, image_name))
-                return selected_image_path
-
-
-            selected_image.change(
-                fn=onDropDownChange,
-                inputs=selected_image,  # 函数的输入
-                outputs=selected_image_preview,  # 函数的输出
-            )
-            image_path = gr.State(selected_image.value)
-        with gr.Row():
-            btn = gr.Button("提交 & 转换", size=[100, 80])
-
-        output_list = []
-        count_per_row = 4
-        idx = 0
-        for i in range(0, 8, count_per_row):
-            # with gr.Group():
-            with gr.Row(equal_height=True):
-                for j in range(0, count_per_row):
-                    # with gr.Column():
-                    #     gr.Markdown(f"{models[i]}")
-                    output_list.append(
-                        gr.Image(
-                            type="numpy",
-                            container=True,
-                            width=height,
-                            height=height + 40,
-                            min_width=height,
-                            label=models[idx],
-                            show_label=True,
-                            interactive=False,
-                            elem_classes=["image"]
-                        )
-                    )
-            idx += 1
-        output_list.append(gr.DataFrame(headers=headers, elem_id="table"))
-
-
-        # 第四行- 若干模型的输出图和表格展示
-        def on_button_click():
-            return run_models_inorder(
-                selected_image_path,
-                # [os.path.join(model_path, model) for model in models],
-                [os.path.join(weight_path, model) for model in models],
-            )
-
-
-        btn.click(
-            on_button_click,
-            outputs=output_list,
-        )
-
-        # @gr.render(inputs=[output_images, output_tables], triggers=[btn.click])
-        # def render_gallery(images, tables):
-        #     # for i, image in enumerate(images):
-        #     #     gallery = gr.Gallery(value=image, key=i)
-        #     for image in images:
-        #         gallery = gr.Gallery(value=image)
-
-    demo.launch()
+MASSACHUSETTS = "Massachusetts"
+DEEPGLOBE = "deepGlobe"
 
 
 def accuracy(pred_mask, label):
@@ -202,7 +67,7 @@ def accuracy(pred_mask, label):
     return TP, FN, TN, FP, acc, recall, iou, pre, f1
 
 
-def test_ce_net_vessel(model, img, weight):
+def test_ce_net_vessel(img, model, weight):
     # 输入 source
     disc = 20
     solver = TTAFrame(model)
@@ -259,8 +124,8 @@ def test_ce_net_vessel(model, img, weight):
         "FP": FP,
         "acc": acc,
         "recall": recall,
-        "iou": iou,
         "pre": pre,
+        "iou": iou,
         "f1": f1,
     }
 
@@ -279,33 +144,220 @@ def test_ce_net_vessel(model, img, weight):
     return [(mask / 127.5) - 1, {weight: params}]
 
 
-def run_models_inorder(image_path, model_list):
+def run_models_inorder(image_path, net_list, weight_list):
     all_params = {}
     all_componnents_source = []
     idx = 1
-    for model in model_list:
-        # image, param = test_ce_net_vessel(image_path, model)
-        image = Image.open(image_path)
-        param = {
-            f"test{idx}": {
-                "模型名": f"test{idx}",
-                "TP": 1.22,
-                "FN": 2.22,
-                "TN": 3.22,
-                "FP": 4.33,
-                "acc": 511.22,
-                "recall": 6.32,
-                "iou": 7999.22,
-                "pre": 8.11,
-                "f1": 12341.22,
-            }
-        }
+    for net, weight in tqdm(zip(net_list, weight_list)):
+        image, param = test_ce_net_vessel(image_path, net, weight)
         idx += 1
         all_componnents_source.append(image)
         all_params.update(param)
     all_componnents_source.append(
-        pd.DataFrame()
-        .from_dict(all_params, orient="index")
-        .round(2)
+        pd.DataFrame().from_dict(all_params, orient="index").round(2)
     )
     return tuple(all_componnents_source)
+
+
+if __name__ == "__main__":
+    dataset_DeepGlobe = {
+        "path": f"{os.path.dirname(__file__)}/img/DeepGlobe",
+        "type": DEEPGLOBE,
+        "name": "DeepGlobe",
+    }
+    dataset_CHN = {
+        "path": f"{os.path.dirname(__file__)}/img/CHN6-CUG",
+        "type": DEEPGLOBE,
+        "name": "CHN6-CUG",
+    }
+    net_deep_list = [
+        deep_UNet,
+        deep_Deeplabv3_plus,
+        deep_ABNet,
+        deep_AABNet,
+        deep_AMIFNet,
+        deep_ADEFNet,
+        deep_AAMIFNet,
+        deep_AADEFNet,
+    ]
+
+    dataset_Massachusetts = {
+        "path": f"{os.path.dirname(__file__)}/img/Massachusetts",
+        "type": MASSACHUSETTS,
+        "name": "Massachusetts",
+    }
+    dataset_SpaceNet = {
+        "path": f"{os.path.dirname(__file__)}/img/SpaceNet",
+        "type": MASSACHUSETTS,
+        "name": "SpaceNet",
+    }
+    net_mass_list = [
+        mass_UNet,
+        mass_Deeplabv3_plus,
+        mass_ABNet,
+        mass_AABNet,
+        mass_AMIFNet,
+        mass_ADEFNet,
+        mass_AAMIFNet,
+        mass_AADEFNet,
+    ]
+
+    datasets = [dataset_DeepGlobe, dataset_CHN, dataset_Massachusetts, dataset_SpaceNet]
+    headers = ["模型名", "TP", "FN", "TN", "FP", "Acc", "Rec", "Pre", "IoU", "F1"]
+
+    height = 150
+
+    with gr.Blocks(
+        css="""
+                    footer {
+                        visibility: hidden
+                    }
+
+                    #table table {
+                        overflow-x: hidden !important;
+                        overflow-y: hidden !important;
+                    }
+
+                    #table span {
+                        font-family: 'Microsoft YaHei', '微软雅黑', sans-serif !important;
+                        text-align: center;
+                    }
+
+                    .sort-button {
+                        display: none !important;
+                    }
+                    .image img{
+                        position: absolute!important;
+                        top: 13px !important;
+                    }
+                   """
+    ) as demo:
+        title = """
+                <center> 
+                <h1> 道路提取系统 </h1>
+                </center>
+                """
+        with gr.Row():
+            gr.HTML(title)
+
+        # 第 1 行，创建下拉框
+        with gr.Row():
+            # 选择数据集
+            selected_dataset = gr.Dropdown(
+                choices=[
+                    (dataset.get("name"), i) for i, dataset in enumerate(datasets)
+                ],
+                value=0,
+                type="value",
+                show_label=False,
+                info="选择数据集",
+            )
+
+            # 拼接两个列表
+            default_image_list = []
+            for dirpath, dirnames, filenames in os.walk(datasets[0].get("path")):
+                for filename in filenames:
+                    if "-mask" not in filename and filename.endswith(".png"):
+                        default_image_list += [os.path.join(dirpath, filename)]
+            for dirpath, dirnames, filenames in os.walk(datasets[1].get("path")):
+                for filename in filenames:
+                    if "-mask" not in filename and filename.endswith(".png"):
+                        default_image_list += [os.path.join(dirpath, filename)]
+            selected_image = gr.Dropdown(
+                choices=[(Path(image).stem, image) for image in default_image_list],
+                value=default_image_list[0],
+                show_label=False,
+                info="选择输入图像",
+            )
+
+            def selected_dataset_change(idx: tuple):
+                lst = []
+                for dirpath, dirnames, filenames in os.walk(datasets[idx].get("path")):
+                    for filename in filenames:
+                        if "-mask" not in filename and filename.endswith(".png"):
+                            lst += [os.path.join(dirpath, filename)]
+                return gr.update(
+                    choices=[(Path(image).stem, image) for image in lst],
+                    value=lst[0],
+                    show_label=False,
+                    info="选择输入图像",
+                )
+
+            selected_dataset.change(
+                fn=selected_dataset_change,
+                inputs=selected_dataset,
+                outputs=selected_image,
+            )
+        # 第 2 行，创建预览原图像和label
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown("##### 高分辨率遥感影像")
+                selected_image_preview = gr.Image(
+                    default_image_list[0],
+                    container=False,
+                    height=height,
+                )
+            with gr.Column():
+                gr.Markdown("##### 对应道路标签")
+                selected_image_label = gr.Image(
+                    default_image_list[0].replace(".png", "-mask.png"),
+                    container=False,
+                    height=height,
+                )
+
+            def onDropDownChange(image_path: str):
+                return image_path, image_path.replace(".png", "-mask.png")
+
+            selected_image.change(
+                fn=onDropDownChange,
+                inputs=selected_image,  # 函数的输入
+                outputs=[selected_image_preview, selected_image_label],  # 函数的输出
+            )
+            image_path = gr.State(selected_image.value)
+        with gr.Row():
+            btn = gr.Button("提交 & 转换")
+
+        output_list = []
+        count_per_row = 4
+        idx = 0
+        for i in range(0, 8, count_per_row):
+            # with gr.Group():
+            with gr.Row(equal_height=True):
+                for j in range(0, count_per_row):
+                    output_list.append(
+                        gr.Image(
+                            type="numpy",
+                            container=True,
+                            width=height,
+                            height=height + 40,
+                            min_width=height,
+                            label=net_deep_list[idx]().get_name(),
+                            show_label=True,
+                            interactive=False,
+                            elem_classes=["image"],
+                        )
+                    )
+                    idx += 1
+        output_list.append(gr.DataFrame(headers=headers, elem_id="table"))
+
+        # 第四行- 若干模型的输出图和表格展示
+        def on_button_click(selected_dataset: int, selected_image: str):
+            if 0 <= selected_dataset <= 1:
+                model_list = net_deep_list
+                weight_list = [
+                    f"{os.path.dirname(__file__)}/weight/deep/{model().get_name()}.th" for model in model_list
+                ]
+            else:
+                model_list = net_mass_list
+                weight_list = [
+                    f"{os.path.dirname(__file__)}/weight/mass/{model().get_name()}.th" for model in model_list
+                ]
+            return run_models_inorder(selected_image, model_list, weight_list)
+
+        btn.click(
+            on_button_click,
+            inputs=[selected_dataset, selected_image],
+            outputs=output_list,
+        )
+
+        demo.launch()

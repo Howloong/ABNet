@@ -354,6 +354,8 @@ class DecoderBlock(nn.Module):
 
 # 正式开始ABNet的结构组成
 class ABNet(nn.Module):
+    def get_name(self):
+        return 'ABNet'
     def __init__(self, nInputChannels=3, n_classes=1, os=16, pretrained=False, freeze_bn=False, _print=True):
         super(ABNet, self).__init__()
 

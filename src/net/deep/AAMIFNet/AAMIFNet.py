@@ -6,8 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
-from vit_seg_modeling import Transformer, DecoderCup
 from vit_seg_modeling import CONFIGS as CONFIGS_ViT_seg
+from vit_seg_modeling import Transformer, DecoderCup
 
 BatchNorm2d = nn.BatchNorm2d
 
@@ -15,6 +15,7 @@ nonlinearity = partial(F.relu, inplace=True)
 
 
 class DeformConv2d(nn.Module):
+
     def __init__(self, inc, outc, kernel_size=3, padding=1, stride=1, bias=None, modulation=False):
         """
         Args:
@@ -229,6 +230,9 @@ class ASPPPoolingW(nn.Sequential):
 
 
 class AAMIFNet(nn.Module):
+    def get_name(self):
+        return 'AAMIFNet'
+
     def __init__(self, n_classes=1, os=16, freeze_bn=False):
 
         super(AAMIFNet, self).__init__()
@@ -250,7 +254,6 @@ class AAMIFNet(nn.Module):
         config.patches.grid = (16, 16)
         self.transformer = Transformer(config, img_size=256, vis=False)
         self.decoder = DecoderCup(config)
-
 
         # ASPP,挑选参数
         if os == 16:
@@ -359,7 +362,7 @@ class AAMIFNet(nn.Module):
         x_decoder, attn_weights, features = self.transformer(x0)  # 1024 768
         # print("x_decoder:",x_decoder.shape)
         x_trans = self.decoder(x_decoder, features)  # 256 32 32
-        x = torch.cat((x, x_trans), dim=1)  #768 32 32
+        x = torch.cat((x, x_trans), dim=1)  # 768 32 32
 
         x1 = self.aspp1(x)
         # print("aspp1", x1.shape)  # 256, 32, 32

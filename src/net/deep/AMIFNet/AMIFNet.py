@@ -229,6 +229,10 @@ class ASPPPoolingW(nn.Sequential):
 
 
 class AMIFNet(nn.Module):
+
+    def get_name(self):
+        return 'AMIFNet'
+
     def __init__(self, n_classes=1, os=16, freeze_bn=False):
 
         super(AMIFNet, self).__init__()

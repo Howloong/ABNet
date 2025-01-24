@@ -206,6 +206,8 @@ class ASPPPoolingW(nn.Sequential):
 
 # 正式开始deeplabv3+的结构组成
 class AADEFNet(nn.Module):
+    def get_name(self):
+        return 'AADEFNet'
     def __init__(self, nInputChannels=3, n_classes=1, os=16, pretrained=False, freeze_bn=False, _print=True):
         super(AADEFNet, self).__init__()
 

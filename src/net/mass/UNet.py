@@ -21,13 +21,17 @@ class ChannelAttention(nn.Module):
         self.mlp = nn.Sequential(
             nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False),
             nn.ReLU(),
-            nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+            nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False),
         )
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        avg_out = self.mlp(self.avg_pool(x))  # 通过平均池化压缩全局空间信息: (B,C,H,W)--> (B,C,1,1) ,然后通过MLP降维升维:(B,C,1,1)
-        max_out = self.mlp(self.max_pool(x))  # 通过最大池化压缩全局空间信息: (B,C,H,W)--> (B,C,1,1) ,然后通过MLP降维升维:(B,C,1,1)
+        avg_out = self.mlp(
+            self.avg_pool(x)
+        )  # 通过平均池化压缩全局空间信息: (B,C,H,W)--> (B,C,1,1) ,然后通过MLP降维升维:(B,C,1,1)
+        max_out = self.mlp(
+            self.max_pool(x)
+        )  # 通过最大池化压缩全局空间信息: (B,C,H,W)--> (B,C,1,1) ,然后通过MLP降维升维:(B,C,1,1)
         out = avg_out + max_out
         return self.sigmoid(out)
 
@@ -36,14 +40,18 @@ class SpatialAttention(nn.Module):
     def __init__(self, kernel_size=7):
         super(SpatialAttention, self).__init__()
 
-        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
+        assert kernel_size in (3, 7), "kernel size must be 3 or 7"
         padding = 3 if kernel_size == 7 else 1
         self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)  # 通过平均池化压缩全局通道信息:(B,C,H,W)-->(B,1,H,W)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)  # 通过最大池化压缩全局通道信息:(B,C,H,W)-->(B,1,H,W)
+        avg_out = torch.mean(
+            x, dim=1, keepdim=True
+        )  # 通过平均池化压缩全局通道信息:(B,C,H,W)-->(B,1,H,W)
+        max_out, _ = torch.max(
+            x, dim=1, keepdim=True
+        )  # 通过最大池化压缩全局通道信息:(B,C,H,W)-->(B,1,H,W)
         x = torch.cat([avg_out, max_out], dim=1)  # 在通道上拼接两个矩阵:(B,2,H,W)
         x = self.conv1(x)  # 通过卷积层得到注意力权重:(B,2,H,W)-->(B,1,H,W)
         return self.sigmoid(x)
@@ -58,7 +66,7 @@ class CBAM(nn.Module):
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                init.kaiming_normal_(m.weight, mode='fan_out')
+                init.kaiming_normal_(m.weight, mode="fan_out")
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
@@ -70,8 +78,12 @@ class CBAM(nn.Module):
                     init.constant_(m.bias, 0)
 
     def forward(self, x):
-        out = x * self.ca(x)  # 通过通道注意力机制得到的特征图,x:(B,C,H,W),ca(x):(B,C,1,1),out:(B,C,H,W)
-        result = out * self.sa(out)  # 通过空间注意力机制得到的特征图,out:(B,C,H,W),sa(out):(B,1,H,W),result:(B,C,H,W)
+        out = x * self.ca(
+            x
+        )  # 通过通道注意力机制得到的特征图,x:(B,C,H,W),ca(x):(B,C,1,1),out:(B,C,H,W)
+        result = out * self.sa(
+            out
+        )  # 通过空间注意力机制得到的特征图,out:(B,C,H,W),sa(out):(B,1,H,W),result:(B,C,H,W)
         return result
 
 
@@ -82,8 +94,15 @@ class Bottleneck(nn.Module):  # 'resnet网络的基本框架’
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, dilation=dilation, padding=dilation,
-                               bias=False)
+        self.conv2 = nn.Conv2d(
+            planes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            dilation=dilation,
+            padding=dilation,
+            bias=False,
+        )
         self.bn2 = BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = BatchNorm2d(planes * 4)
@@ -124,15 +143,25 @@ class ResNet(nn.Module):  # renet网络的构成部分
         else:
             raise NotImplementedError
         # Modules
-        self.conv1 = nn.Conv2d(nInputChannels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(
+            nInputChannels, 64, kernel_size=7, stride=2, padding=3, bias=False
+        )
         self.bn1 = BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        self.layer1 = self._make_layer(block, 64, layers[0], stride=strides[0], dilation=dilations[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=strides[1], dilation=dilations[1])
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=strides[2], dilation=dilations[2])
-        self.layer4 = self._make_MG_unit(block, 512, blocks=blocks, stride=strides[3], dilation=dilations[3])
+        self.layer1 = self._make_layer(
+            block, 64, layers[0], stride=strides[0], dilation=dilations[0]
+        )
+        self.layer2 = self._make_layer(
+            block, 128, layers[1], stride=strides[1], dilation=dilations[1]
+        )
+        self.layer3 = self._make_layer(
+            block, 256, layers[2], stride=strides[2], dilation=dilations[2]
+        )
+        self.layer4 = self._make_MG_unit(
+            block, 512, blocks=blocks, stride=strides[3], dilation=dilations[3]
+        )
         self._init_weight()
 
         if pretrained:
@@ -142,7 +171,13 @@ class ResNet(nn.Module):  # renet网络的构成部分
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    self.inplanes,
+                    planes * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
                 BatchNorm2d(planes * block.expansion),
             )
 
@@ -158,16 +193,31 @@ class ResNet(nn.Module):  # renet网络的构成部分
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    self.inplanes,
+                    planes * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
                 BatchNorm2d(planes * block.expansion),
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, dilation=blocks[0] * dilation, downsample=downsample))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                stride,
+                dilation=blocks[0] * dilation,
+                downsample=downsample,
+            )
+        )
         self.inplanes = planes * block.expansion
         for i in range(1, len(blocks)):
-            layers.append(block(self.inplanes, planes, stride=1, dilation=blocks[i] * dilation))
+            layers.append(
+                block(self.inplanes, planes, stride=1, dilation=blocks[i] * dilation)
+            )
 
         return nn.Sequential(*layers)
 
@@ -187,13 +237,15 @@ class ResNet(nn.Module):  # renet网络的构成部分
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.weight.data.normal_(0, math.sqrt(2.0 / n))
             elif isinstance(m, BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
     def _load_pretrained_model(self):
-        pretrain_dict = model_zoo.load_url('https://download.pytorch.org/models/resnet101-5d3b4d8f.pth')
+        pretrain_dict = model_zoo.load_url(
+            "https://download.pytorch.org/models/resnet101-5d3b4d8f.pth"
+        )
         model_dict = {}
         state_dict = self.state_dict()
         for k, v in pretrain_dict.items():
@@ -212,8 +264,15 @@ class ASPP_module(nn.Module):  # ASpp模块的组成
         else:
             kernel_size = 3
             padding = dilation
-        self.atrous_convolution = nn.Conv2d(inplanes, planes, kernel_size=kernel_size,
-                                            stride=1, padding=padding, dilation=dilation, bias=False)
+        self.atrous_convolution = nn.Conv2d(
+            inplanes,
+            planes,
+            kernel_size=kernel_size,
+            stride=1,
+            padding=padding,
+            dilation=dilation,
+            bias=False,
+        )
         self.bn = BatchNorm2d(planes)
         self.relu = nn.ReLU()
         self._init_weight()
@@ -227,7 +286,7 @@ class ASPP_module(nn.Module):  # ASpp模块的组成
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.weight.data.normal_(0, math.sqrt(2.0 / n))
             elif isinstance(m, BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
@@ -241,7 +300,9 @@ class DecoderBlock(nn.Module):
         self.norm1 = nn.BatchNorm2d(in_channels // 4)
         self.relu1 = nonlinearity
 
-        self.deconv2 = nn.ConvTranspose2d(in_channels // 4, in_channels // 4, 3, stride=2, padding=1, output_padding=1)
+        self.deconv2 = nn.ConvTranspose2d(
+            in_channels // 4, in_channels // 4, 3, stride=2, padding=1, output_padding=1
+        )
         self.norm2 = nn.BatchNorm2d(in_channels // 4)
         self.relu2 = nonlinearity
 
@@ -264,7 +325,18 @@ class DecoderBlock(nn.Module):
 
 # 正式开始ABNet的结构组成
 class UNet(nn.Module):
-    def __init__(self, nInputChannels=3, n_classes=1, os=16, pretrained=False, freeze_bn=False, _print=True):
+    def get_name(self):
+        return "UNet"
+
+    def __init__(
+        self,
+        nInputChannels=3,
+        n_classes=1,
+        os=16,
+        pretrained=False,
+        freeze_bn=False,
+        _print=True,
+    ):
         super(UNet, self).__init__()
 
         filters = [64, 64, 128, 256, 512]
@@ -301,10 +373,12 @@ class UNet(nn.Module):
         self.cbam = CBAM(512)
 
         # 全局平均池化层的设置
-        self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
-                                             nn.Conv2d(512, 256, 1, stride=1, bias=False),
-                                             BatchNorm2d(256),
-                                             nn.ReLU())
+        self.global_avg_pool = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Conv2d(512, 256, 1, stride=1, bias=False),
+            BatchNorm2d(256),
+            nn.ReLU(),
+        )
 
         self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
         self.bn1 = BatchNorm2d(256)
@@ -313,13 +387,15 @@ class UNet(nn.Module):
         self.conv2 = nn.Conv2d(64, 48, 1, bias=False)
         self.bn2 = BatchNorm2d(48)
         # 结构图中的解码部分的最后一个3*3的卷积块
-        self.last_conv = nn.Sequential(nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                       BatchNorm2d(256),
-                                       nn.ReLU(),
-                                       nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                       BatchNorm2d(256),
-                                       nn.ReLU(),
-                                       nn.Conv2d(256, n_classes, kernel_size=1, stride=1))
+        self.last_conv = nn.Sequential(
+            nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, n_classes, kernel_size=1, stride=1),
+        )
 
         if freeze_bn:
             self._freeze_bn()
@@ -344,13 +420,15 @@ class UNet(nn.Module):
         x3 = self.aspp3(x)
         x4 = self.aspp4(x)
         x5 = self.global_avg_pool(x)
-        x5 = F.upsample(x5, size=x4.size()[2:], mode='bilinear', align_corners=True)
+        x5 = F.upsample(x5, size=x4.size()[2:], mode="bilinear", align_corners=True)
         # 把四个ASPP模块以及全局池化层拼接起来
         x = torch.cat((x1, x2, x3, x4, x5), dim=1)
         # 上采样 两层解码器
         d2 = self.decoder1(x)
         d1 = self.decoder2(d2)
-        d1 = F.upsample(d1, size=low_level_features.size()[2:], mode='bilinear', align_corners=True)
+        d1 = F.upsample(
+            d1, size=low_level_features.size()[2:], mode="bilinear", align_corners=True
+        )
 
         low_level_features = self.conv2(low_level_features)
         low_level_features = self.bn2(low_level_features)
@@ -360,7 +438,7 @@ class UNet(nn.Module):
         x = torch.cat((d1, low_level_features), dim=1)
         x = self.last_conv(x)
         # 实现插值和上采样
-        x = F.interpolate(x, size=input.size()[2:], mode='bilinear', align_corners=True)
+        x = F.interpolate(x, size=input.size()[2:], mode="bilinear", align_corners=True)
         x = F.sigmoid(x)
         print("final", x.shape)
         return x
@@ -374,7 +452,7 @@ class UNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.weight.data.normal_(0, math.sqrt(2.0 / n))
             elif isinstance(m, BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()

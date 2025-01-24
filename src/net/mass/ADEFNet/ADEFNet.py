@@ -229,6 +229,8 @@ class ASPPPoolingW(nn.Sequential):
 
 
 class ADEFNet(nn.Module):
+    def get_name(self):
+        return 'ADEFNet'
     def __init__(self, n_classes=1, os=16, freeze_bn=False):
 
         super(ADEFNet, self).__init__()
